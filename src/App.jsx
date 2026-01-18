@@ -47,10 +47,42 @@ function App() {
     const boredState = {
         isBored: false,
         timer: 0,
-        duration: 8.0,      // Total durasi joget
-        triggerTime: 120,   // 2 menit menunggu
-        rhythmSpeed: 4,     // Kecepatan ayunan (Sedikit diperlambat biar chill)
-        fadeDuration: 2.0   // Butuh 2 detik buat mulai & berhenti pelan-pelan (SMOOTHING)
+        duration: 8.0,
+        triggerTime: 120,
+        rhythmSpeed: 4,
+        fadeDuration: 2.0
+    }
+
+    // === PERBAIKAN LOGIKA MATA (EYES) ===
+    const eyeState = {
+        currentY: 0, 
+        currentX: 0, 
+        targetY: 0,
+        targetX: 0,
+        timeSinceLastMove: 0,
+        moveInterval: 2.0, 
+        isGlancing: false
+    }
+
+    // Helper: Cari arah lirikan acak (YANG SUDAH DIPERHALUS)
+    function getRandomEyeGlance() {
+        const roll = Math.random();
+        let y = 0, x = 0;
+        
+        // REVISI: Angkanya diperkecil drastis biar gak serem
+        // Hapus lirik atas.
+        
+        if (roll < 0.45) {
+             // Lirik Kiri (Dikit banget)
+             y = 0.03 + Math.random() * 0.03; 
+        } else if (roll < 0.90) {
+             // Lirik Kanan (Dikit banget)
+             y = -0.03 - Math.random() * 0.03;
+        } else {
+             // Lirik Bawah dikit (Shy look)
+             x = 0.04; 
+        }
+        return { y, x };
     }
 
     // === POSE STATE ===
@@ -86,27 +118,22 @@ function App() {
       return 2.5 + Math.random() * 4
     }
 
-    // === RESET TIMER (INTERAKSI) ===
+    // === RESET TIMER ===
     const resetIdleTimer = () => {
         lastInteractionTime = clock.getElapsedTime()
-        
-        // Kalau lagi joget dan di-klik, hentikan dengan halus
         if (boredState.isBored) {
             boredState.isBored = false
             boredState.timer = 0
             poseState.target = { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
-            // Transisi balik ke normal agak pelan biar gak kaget
             poseState.transitionSpeed = 0.03 
         }
     }
 
-    // Event Listener
     window.addEventListener('click', resetIdleTimer)
     window.addEventListener('keydown', resetIdleTimer)
 
     loader.load('/cewaifu.vrm', (gltf) => {
       vrm = gltf.userData.vrm
-      // Setup Tulang
       const leftUpperArm = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm')
       const rightUpperArm = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm')
       const leftLowerArm = vrm.humanoid?.getNormalizedBoneNode('leftLowerArm')
@@ -160,48 +187,32 @@ function App() {
 
         // === LOGIKA CEK INTERAKSI ===
         const timeSinceLastInteraction = time - lastInteractionTime
-        
-        // Trigger Bosen (2 Menit)
         if (!boredState.isBored && timeSinceLastInteraction > boredState.triggerTime) {
             boredState.isBored = true
             boredState.timer = 0
-            
-            // Reset posisi ke tengah
             poseState.target = { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
             poseState.transitionSpeed = 0.04
         }
 
-        // Variabel untuk menyimpan Offset Joget
         let danceSpineZ = 0
         let danceChestY = 0
         let danceHeadX = 0
         let danceHeadZ = 0
 
-        // LOGIKA SAAT JOGET (DENGAN SMOOTHING)
+        // LOGIKA SAAT JOGET
         if (boredState.isBored) {
             boredState.timer += delta
-            
-            // === INTENSITY CALCULATION (KUNCI AGAR SMOOTH) ===
-            // 1. Fade In: Timer awal (0 -> 2 detik) naik dari 0 ke 1
             const fadeIn = Math.min(boredState.timer / boredState.fadeDuration, 1)
-            
-            // 2. Fade Out: Sisa waktu akhir (2 detik terakhir) turun dari 1 ke 0
             const timeLeft = boredState.duration - boredState.timer
             const fadeOut = Math.min(timeLeft / boredState.fadeDuration, 1)
-
-            // Intensitas akhir adalah kombinasi keduanya (ambil yang paling kecil)
-            // Jadi: 0 -> naik -> 1 (tahan) -> turun -> 0
             const intensity = Math.min(fadeIn, fadeOut)
             
-            // Kalau timer sudah habis, intensity otomatis 0, jadi gak akan 'deg' saat berhenti
             if (intensity < 0) {
                  boredState.isBored = false
                  lastInteractionTime = time
                  poseState.target = getRandomPose()
             } else {
-                // Kalkulasi gerakan dikalikan intensity
                 const rhythm = time * boredState.rhythmSpeed
-                
                 danceSpineZ = Math.sin(rhythm) * 0.06 * intensity
                 danceChestY = Math.cos(rhythm) * 0.03 * intensity
                 danceHeadX = Math.abs(Math.sin(rhythm)) * 0.05 * intensity
@@ -209,7 +220,6 @@ function App() {
             }
 
         } else {
-            // === MODE RANDOM (SAAT TIDAK BOSAN) ===
             poseState.idleTime += delta
             if (poseState.idleTime > poseState.nextChangeTime) {
                 poseState.target = getRandomPose()
@@ -219,7 +229,47 @@ function App() {
             }
         }
 
-        // LERP MOVEMENT
+        // === UPDATE LOGIKA MATA (DIPERHALUS) ===
+        eyeState.timeSinceLastMove += delta
+        if (eyeState.timeSinceLastMove > eyeState.moveInterval) {
+            eyeState.timeSinceLastMove = 0
+            
+            if (eyeState.isGlancing) {
+                // Balik ke Center
+                eyeState.targetY = 0
+                eyeState.targetX = 0
+                eyeState.isGlancing = false
+                eyeState.moveInterval = 2.0 + Math.random() * 3.0
+            } else {
+                // Melirik
+                const glance = getRandomEyeGlance()
+                
+                // === SINKRONISASI BIAR GAK NABRAK ===
+                // Jika kepala nengok ke kiri (+), mata justru harus geser sedikit ke kanan (-)
+                // supaya seolah-olah dia tetap melihat ke arah depan (User), bukan melotot ke tembok.
+                // Logika ini disebut "Counter Rotation"
+                const keepEyeContactBias = -poseState.current.headY * 0.3; 
+
+                eyeState.targetY = glance.y + keepEyeContactBias;
+                
+                // Clamp (Batasi) nilai mata biar gak ekstrim/juling
+                // Batas aman mata VRM biasanya -0.1 sampai 0.1
+                if (eyeState.targetY > 0.08) eyeState.targetY = 0.08;
+                if (eyeState.targetY < -0.08) eyeState.targetY = -0.08;
+
+                eyeState.targetX = glance.x
+                eyeState.isGlancing = true
+                eyeState.moveInterval = 0.5 + Math.random() * 1.0
+            }
+        }
+
+        // Lerp Mata (Agak lambat biar gak "deg")
+        const eyeLerp = 0.1
+        eyeState.currentY += (eyeState.targetY - eyeState.currentY) * eyeLerp
+        eyeState.currentX += (eyeState.targetX - eyeState.currentX) * eyeLerp
+
+
+        // LERP MOVEMENT BADAN
         const lerp = poseState.transitionSpeed
         poseState.current.headY += (poseState.target.headY - poseState.current.headY) * lerp
         poseState.current.headX += (poseState.target.headX - poseState.current.headX) * lerp
@@ -228,7 +278,7 @@ function App() {
         poseState.current.spineZ += (poseState.target.spineZ - poseState.current.spineZ) * lerp
         poseState.current.chestY += (poseState.target.chestY - poseState.current.chestY) * lerp
 
-        // Micro movement (Napas)
+        // Micro movement
         const microX = Math.sin(time * 0.8) * 0.003
         const microY = Math.sin(time * 0.6) * 0.003
         const microZ = Math.sin(time * 0.5) * 0.002
@@ -250,16 +300,23 @@ function App() {
              chest.rotation.y = poseState.current.chestY + microY * 0.2 + danceChestY
         }
 
-        // === EKSPRESI & MATA ===
-        // Blink logic tetap jalan
+        // === APPLY MATA ===
+        const leftEye = vrm.humanoid?.getNormalizedBoneNode('leftEye')
+        const rightEye = vrm.humanoid?.getNormalizedBoneNode('rightEye')
+        if (leftEye && rightEye) {
+             leftEye.rotation.y = eyeState.currentY
+             leftEye.rotation.x = eyeState.currentX
+             rightEye.rotation.y = eyeState.currentY
+             rightEye.rotation.x = eyeState.currentX
+        }
+
+        // Blink
         const blinkBase = Math.floor(time / 3)
         const blinkOffset = Math.sin(blinkBase * 12.345) * 0.5
         const blinkCycle = (time + blinkOffset) % 3
         const blinkVal = blinkCycle > 2.85 ? 1 : 0
-        
         if (vrm.expressionManager) {
             vrm.expressionManager.setValue('blink', blinkVal)
-            // Saya hapus logika 'happy' di sini sesuai request, jadi mata normal aja
         }
         
         vrm.scene.position.y = Math.sin(time * 2) * 0.002
