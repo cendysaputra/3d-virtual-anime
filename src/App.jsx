@@ -201,6 +201,7 @@ function App() {
 
       renderer.render(scene, camera)
     }
+    
     animate()
 
     const handleResize = () => {
