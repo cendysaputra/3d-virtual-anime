@@ -42,36 +42,59 @@ function App() {
     const clock = new THREE.Clock()
     let frameCount = 0
 
-    // === HEAD MOVEMENT STATE ===
-    const headState = {
-      currentPose: { y: 0, x: 0, z: 0 },
-      targetPose: { y: 0, x: 0, z: 0 },
+    // === POSE STATE ===
+    const poseState = {
+      current: { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 },
+      target: { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 },
       transitionSpeed: 0.02,
       nextChangeTime: 3,
       idleTime: 0
     }
 
-    // Random head poses
-    const headPoses = [
-      { y: 0, x: 0, z: 0, name: 'center' },
-      { y: 0.15, x: 0, z: 0, name: 'look right' },
-      { y: -0.15, x: 0, z: 0, name: 'look left' },
-      { y: 0.08, x: 0.05, z: 0, name: 'look right up' },
-      { y: -0.08, x: 0.05, z: 0, name: 'look left up' },
-      { y: 0, x: -0.08, z: 0, name: 'look down' },
-      { y: 0.05, x: 0, z: 0.08, name: 'tilt right' },
-      { y: -0.05, x: 0, z: -0.08, name: 'tilt left' },
-      { y: 0.1, x: 0.03, z: 0.05, name: 'curious right' },
-      { y: -0.1, x: 0.03, z: -0.05, name: 'curious left' },
-      { y: 0, x: 0.06, z: 0.06, name: 'thinking' },
+    // Poses yang sinkron kepala + badan
+    const poses = [
+      // Center / netral
+      { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 },
+      
+      // Nengok kanan - badan ikut serong kanan sedikit
+      { headY: 0.15, headX: 0, headZ: 0, spineY: 0.05, spineZ: 0, chestY: 0.03 },
+      { headY: 0.2, headX: 0.03, headZ: 0, spineY: 0.08, spineZ: 0, chestY: 0.05 },
+      
+      // Nengok kiri - badan ikut serong kiri sedikit
+      { headY: -0.15, headX: 0, headZ: 0, spineY: -0.05, spineZ: 0, chestY: -0.03 },
+      { headY: -0.2, headX: 0.03, headZ: 0, spineY: -0.08, spineZ: 0, chestY: -0.05 },
+      
+      // Miring kanan - kepala & badan miring bareng
+      { headY: 0.05, headX: 0, headZ: 0.1, spineY: 0.02, spineZ: 0.03, chestY: 0 },
+      
+      // Miring kiri
+      { headY: -0.05, headX: 0, headZ: -0.1, spineY: -0.02, spineZ: -0.03, chestY: 0 },
+      
+      // Curious kanan - nengok + miring
+      { headY: 0.12, headX: 0.04, headZ: 0.08, spineY: 0.04, spineZ: 0.02, chestY: 0.03 },
+      
+      // Curious kiri
+      { headY: -0.12, headX: 0.04, headZ: -0.08, spineY: -0.04, spineZ: -0.02, chestY: -0.03 },
+      
+      // Thinking - lihat atas, badan agak condong
+      { headY: 0.05, headX: 0.08, headZ: 0.06, spineY: 0.02, spineZ: 0.02, chestY: 0 },
+      
+      // Shy/malu - lihat bawah, badan agak membungkuk
+      { headY: 0, headX: -0.1, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 },
+      
+      // Relax kanan - santai condong ke kanan
+      { headY: 0.08, headX: 0, headZ: 0.05, spineY: 0.03, spineZ: 0.04, chestY: 0.02 },
+      
+      // Relax kiri
+      { headY: -0.08, headX: 0, headZ: -0.05, spineY: -0.03, spineZ: -0.04, chestY: -0.02 },
     ]
 
     function getRandomPose() {
-      return headPoses[Math.floor(Math.random() * headPoses.length)]
+      return poses[Math.floor(Math.random() * poses.length)]
     }
 
     function getRandomInterval() {
-      return 2 + Math.random() * 4 // 2-6 detik
+      return 2.5 + Math.random() * 4 // 2.5-6.5 detik
     }
 
     loader.load('/cewaifu.vrm', (gltf) => {
@@ -139,40 +162,52 @@ function App() {
         vrm.expressionManager?.setValue('blink', blinkCycle > 2.85 ? 1 : 0)
 
         // === NAPAS ===
-        vrm.scene.position.y = Math.sin(time * 2) * 0.002
+        const breathe = Math.sin(time * 2) * 0.002
+        vrm.scene.position.y = breathe
 
-        // === HEAD MOVEMENT - Random poses ===
-        headState.idleTime += delta
+        // === POSE SYSTEM - Kepala & Badan sinkron ===
+        poseState.idleTime += delta
 
-        // Ganti pose kalau sudah waktunya
-        if (headState.idleTime > headState.nextChangeTime) {
-          headState.targetPose = getRandomPose()
-          headState.nextChangeTime = getRandomInterval()
-          headState.idleTime = 0
-          // Variasi speed transisi
-          headState.transitionSpeed = 0.015 + Math.random() * 0.02
+        if (poseState.idleTime > poseState.nextChangeTime) {
+          poseState.target = getRandomPose()
+          poseState.nextChangeTime = getRandomInterval()
+          poseState.idleTime = 0
+          poseState.transitionSpeed = 0.012 + Math.random() * 0.015
         }
 
-        // Smooth lerp ke target pose
-        headState.currentPose.y += (headState.targetPose.y - headState.currentPose.y) * headState.transitionSpeed
-        headState.currentPose.x += (headState.targetPose.x - headState.currentPose.x) * headState.transitionSpeed
-        headState.currentPose.z += (headState.targetPose.z - headState.currentPose.z) * headState.transitionSpeed
+        // Smooth lerp semua nilai
+        const lerp = poseState.transitionSpeed
+        poseState.current.headY += (poseState.target.headY - poseState.current.headY) * lerp
+        poseState.current.headX += (poseState.target.headX - poseState.current.headX) * lerp
+        poseState.current.headZ += (poseState.target.headZ - poseState.current.headZ) * lerp
+        poseState.current.spineY += (poseState.target.spineY - poseState.current.spineY) * lerp
+        poseState.current.spineZ += (poseState.target.spineZ - poseState.current.spineZ) * lerp
+        poseState.current.chestY += (poseState.target.chestY - poseState.current.chestY) * lerp
 
+        // Micro movement
+        const microX = Math.sin(time * 0.8) * 0.003
+        const microY = Math.sin(time * 0.6) * 0.003
+        const microZ = Math.sin(time * 0.5) * 0.002
+
+        // Apply ke kepala
         const head = vrm.humanoid?.getNormalizedBoneNode('head')
         if (head) {
-          // Base pose + micro movement biar gak kaku
-          const microX = Math.sin(time * 0.8) * 0.005
-          const microY = Math.sin(time * 0.6) * 0.005
-
-          head.rotation.y = headState.currentPose.y + microY
-          head.rotation.x = headState.currentPose.x + microX
-          head.rotation.z = headState.currentPose.z
+          head.rotation.y = poseState.current.headY + microY
+          head.rotation.x = poseState.current.headX + microX
+          head.rotation.z = poseState.current.headZ
         }
 
-        // === BADAN SWAY ===
+        // Apply ke spine (pinggang)
         const spine = vrm.humanoid?.getNormalizedBoneNode('spine')
         if (spine) {
-          spine.rotation.z = Math.sin(time * 0.4) * 0.008 + Math.sin(time * 0.19) * 0.005
+          spine.rotation.y = poseState.current.spineY + microY * 0.3
+          spine.rotation.z = poseState.current.spineZ + microZ
+        }
+
+        // Apply ke chest (dada) - lebih subtle
+        const chest = vrm.humanoid?.getNormalizedBoneNode('chest')
+        if (chest) {
+          chest.rotation.y = poseState.current.chestY + microY * 0.2
         }
 
         // === TANGAN ===
@@ -201,7 +236,6 @@ function App() {
 
       renderer.render(scene, camera)
     }
-    
     animate()
 
     const handleResize = () => {
