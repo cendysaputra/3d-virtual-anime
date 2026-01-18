@@ -53,7 +53,7 @@ function App() {
         fadeDuration: 2.0
     }
 
-    // === PERBAIKAN LOGIKA MATA (EYES) ===
+    // === LOGIKA MATA (EYES) ===
     const eyeState = {
         currentY: 0, 
         currentX: 0, 
@@ -64,23 +64,17 @@ function App() {
         isGlancing: false
     }
 
-    // Helper: Cari arah lirikan acak (YANG SUDAH DIPERHALUS)
+    // Helper: Cari arah lirikan acak
     function getRandomEyeGlance() {
         const roll = Math.random();
         let y = 0, x = 0;
         
-        // REVISI: Angkanya diperkecil drastis biar gak serem
-        // Hapus lirik atas.
-        
         if (roll < 0.45) {
-             // Lirik Kiri (Dikit banget)
-             y = 0.03 + Math.random() * 0.03; 
+             y = 0.03 + Math.random() * 0.03; // Lirik Kiri
         } else if (roll < 0.90) {
-             // Lirik Kanan (Dikit banget)
-             y = -0.03 - Math.random() * 0.03;
+             y = -0.03 - Math.random() * 0.03; // Lirik Kanan
         } else {
-             // Lirik Bawah dikit (Shy look)
-             x = 0.04; 
+             x = 0.04; // Lirik Bawah
         }
         return { y, x };
     }
@@ -129,8 +123,23 @@ function App() {
         }
     }
 
+    // Disable right-click context menu
+    const handleContextMenu = (e) => {
+      e.preventDefault()
+      return false
+    }
+
+    // Disable copy-paste
+    const handleCopy = (e) => {
+      e.preventDefault()
+      return false
+    }
+
     window.addEventListener('click', resetIdleTimer)
     window.addEventListener('keydown', resetIdleTimer)
+    window.addEventListener('contextmenu', handleContextMenu)
+    window.addEventListener('copy', handleCopy)
+    window.addEventListener('cut', handleCopy)
 
     loader.load('/cewaifu.vrm', (gltf) => {
       vrm = gltf.userData.vrm
@@ -229,7 +238,7 @@ function App() {
             }
         }
 
-        // === UPDATE LOGIKA MATA (DIPERHALUS) ===
+        // === UPDATE LOGIKA MATA ===
         eyeState.timeSinceLastMove += delta
         if (eyeState.timeSinceLastMove > eyeState.moveInterval) {
             eyeState.timeSinceLastMove = 0
@@ -245,15 +254,11 @@ function App() {
                 const glance = getRandomEyeGlance()
                 
                 // === SINKRONISASI BIAR GAK NABRAK ===
-                // Jika kepala nengok ke kiri (+), mata justru harus geser sedikit ke kanan (-)
-                // supaya seolah-olah dia tetap melihat ke arah depan (User), bukan melotot ke tembok.
-                // Logika ini disebut "Counter Rotation"
                 const keepEyeContactBias = -poseState.current.headY * 0.3; 
 
                 eyeState.targetY = glance.y + keepEyeContactBias;
                 
-                // Clamp (Batasi) nilai mata biar gak ekstrim/juling
-                // Batas aman mata VRM biasanya -0.1 sampai 0.1
+                // Clamp (Batasi)
                 if (eyeState.targetY > 0.08) eyeState.targetY = 0.08;
                 if (eyeState.targetY < -0.08) eyeState.targetY = -0.08;
 
@@ -263,7 +268,7 @@ function App() {
             }
         }
 
-        // Lerp Mata (Agak lambat biar gak "deg")
+        // Lerp Mata
         const eyeLerp = 0.1
         eyeState.currentY += (eyeState.targetY - eyeState.currentY) * eyeLerp
         eyeState.currentX += (eyeState.targetX - eyeState.currentX) * eyeLerp
@@ -300,7 +305,7 @@ function App() {
              chest.rotation.y = poseState.current.chestY + microY * 0.2 + danceChestY
         }
 
-        // === APPLY MATA ===
+        // APPLY MATA
         const leftEye = vrm.humanoid?.getNormalizedBoneNode('leftEye')
         const rightEye = vrm.humanoid?.getNormalizedBoneNode('rightEye')
         if (leftEye && rightEye) {
@@ -310,11 +315,12 @@ function App() {
              rightEye.rotation.x = eyeState.currentX
         }
 
-        // Blink
+        // Blink Only (Animasi mulut dihapus)
         const blinkBase = Math.floor(time / 3)
         const blinkOffset = Math.sin(blinkBase * 12.345) * 0.5
         const blinkCycle = (time + blinkOffset) % 3
         const blinkVal = blinkCycle > 2.85 ? 1 : 0
+        
         if (vrm.expressionManager) {
             vrm.expressionManager.setValue('blink', blinkVal)
         }
@@ -353,12 +359,24 @@ function App() {
     return () => {
         window.removeEventListener('click', resetIdleTimer)
         window.removeEventListener('keydown', resetIdleTimer)
+        window.removeEventListener('contextmenu', handleContextMenu)
+        window.removeEventListener('copy', handleCopy)
+        window.removeEventListener('cut', handleCopy)
         window.removeEventListener('resize', handleResize)
         renderer.dispose()
     }
   }, [])
 
-  return <canvas ref={canvasRef} style={{ display: 'block' }} />
+  return <canvas
+    ref={canvasRef}
+    style={{
+      display: 'block',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      MozUserSelect: 'none',
+      msUserSelect: 'none'
+    }}
+  />
 }
 
 export default App

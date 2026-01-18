@@ -26,3 +26,6 @@ dist-ssr
 # Claude Code
 .claude
 CONTEXT.md
+
+# Character Configuration
+src/characterConfig.js
