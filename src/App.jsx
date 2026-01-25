@@ -427,6 +427,7 @@ function App() {
         }
         if (leftLowerArm) leftLowerArm.rotation.x = -0.1 + Math.sin(time * 0.5) * 0.015
 
+        // Apply tangan kanan (wave atau idle)
         if (rightUpperArm) {
              rightUpperArm.rotation.z = rArmZ
              rightUpperArm.rotation.x = rArmX
