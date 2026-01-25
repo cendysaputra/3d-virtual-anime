@@ -57,10 +57,10 @@ function App() {
     const sneezeState = {
         active: false,
         timer: 0,
-        phase1Duration: 1.5, // "Haa..." (Kepala mundur)
-        phase2Duration: 0.2, // "CHOO!" (Kepala maju)
-        phase3Duration: 0.5, // Recovery
-        phase4Duration: 2.5  // Malu
+        phase1Duration: 1.5,
+        phase2Duration: 0.2,
+        phase3Duration: 0.5,
+        phase4Duration: 2.5
     }
 
     const triggerSneeze = () => {
@@ -72,6 +72,59 @@ function App() {
             poseState.target = { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
         }
     }
+
+    // === LOGIKA BICARA (SPEAKING) dengan Audio Amplitude Detection ===
+    const speakState = { isSpeaking: false, mouthOpenness: 0, audioAmplitude: 0, currentAudio: null }
+    
+    // Audio files
+    const audioFiles = {
+        zero: new Audio('/zero.mp3')
+    }
+    
+    // Web Audio API untuk deteksi amplitude
+    let audioContext = null
+    let analyser = null
+    let dataArray = null
+    const audioSources = {}
+    
+    const setupAudioAnalyser = (audioElement, audioKey) => {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)()
+            analyser = audioContext.createAnalyser()
+            analyser.fftSize = 256
+            analyser.smoothingTimeConstant = 0.3
+            analyser.connect(audioContext.destination)
+            dataArray = new Uint8Array(analyser.frequencyBinCount)
+        }
+        if (!audioSources[audioKey]) {
+            const source = audioContext.createMediaElementSource(audioElement)
+            source.connect(analyser)
+            audioSources[audioKey] = source
+        }
+    }
+    
+    const getAudioAmplitude = () => {
+        if (!analyser || !dataArray) return 0
+        analyser.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) { sum += dataArray[i] }
+        return sum / dataArray.length / 255
+    }
+    
+    const playVoice = (audioKey) => {
+        if (speakState.isSpeaking) return
+        const audio = audioFiles[audioKey]
+        if (!audio) return
+        
+        setupAudioAnalyser(audio, audioKey)
+        speakState.currentAudio = audio
+        audio.currentTime = 0
+        audio.onplay = () => { speakState.isSpeaking = true; boredState.isBored = false }
+        audio.onended = () => { speakState.isSpeaking = false; speakState.mouthOpenness = 0; speakState.audioAmplitude = 0; speakState.currentAudio = null }
+        audio.play().catch(err => console.log('Audio error:', err))
+    }
+    
+    const speak = () => playVoice('zero')
 
     // === LOGIKA MATA (EYES) ===
     const eyeState = {
@@ -130,9 +183,8 @@ function App() {
     
     const handleKeyDown = (e) => {
         resetIdleTimer();
-        if (e.key.toLowerCase() === 's') {
-            triggerSneeze();
-        }
+        if (e.key.toLowerCase() === 's') { triggerSneeze(); }
+        if (e.key.toLowerCase() === 'h') { speak(); }
     }
 
     window.addEventListener('click', resetIdleTimer)
@@ -187,16 +239,15 @@ function App() {
         }
 
         let danceSpineZ = 0, danceChestY = 0, danceHeadX = 0, danceHeadZ = 0
-        let blinkOverride = -1 // -1 artinya pakai logic blink biasa
+        let blinkOverride = -1
         let mouthOpenOverride = 0
         let sorrowOverride = 0
 
-        // 1. LOGIKA BERSIN & MALU (Head & Expression Only)
+        // 1. LOGIKA BERSIN & MALU
         if (sneezeState.active) {
             sneezeState.timer += delta
             const { phase1Duration, phase2Duration, phase3Duration, phase4Duration } = sneezeState
             
-            // PHASE 1: BUILD UP ("Haaa...")
             if (sneezeState.timer < phase1Duration) {
                 const progress = sneezeState.timer / phase1Duration
                 poseState.target = { headY: 0, headX: -0.3 * progress, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
@@ -204,21 +255,18 @@ function App() {
                 blinkOverride = progress
                 mouthOpenOverride = progress * 0.3
             } 
-            // PHASE 2: RELEASE ("CHOO!")
             else if (sneezeState.timer < phase1Duration + phase2Duration) {
                 poseState.target = { headY: 0, headX: 0.6, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
                 poseState.transitionSpeed = 0.4 
                 blinkOverride = 1
                 mouthOpenOverride = 1.0 
             } 
-            // PHASE 3: RECOVERY
             else if (sneezeState.timer < phase1Duration + phase2Duration + phase3Duration) {
                 poseState.target = { headY: 0, headX: 0, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
                 poseState.transitionSpeed = 0.05
                 blinkOverride = 0
                 mouthOpenOverride = 0
             }
-            // === FASE 4: SHY / MALU ===
             else if (sneezeState.timer < phase1Duration + phase2Duration + phase3Duration + phase4Duration) {
                 poseState.target = { headY: 0.15, headX: 0.15, headZ: 0, spineY: 0, spineZ: 0, chestY: 0 }
                 poseState.transitionSpeed = 0.03
@@ -226,7 +274,6 @@ function App() {
                 blinkOverride = 0
                 mouthOpenOverride = 0
             }
-            // SELESAI
             else {
                 sneezeState.active = false
                 poseState.target = getRandomPose()
@@ -341,7 +388,18 @@ function App() {
             vrm.expressionManager.setValue('blink', finalBlink)
             vrm.expressionManager.setValue('sorrow', sorrowOverride)
 
-            if (sneezeState.active) {
+            if (speakState.isSpeaking) {
+                speakState.audioAmplitude = getAudioAmplitude()
+                
+                if (speakState.audioAmplitude > 0.02) {
+                    const targetMouth = speakState.audioAmplitude * 1.5
+                    speakState.mouthOpenness += (targetMouth - speakState.mouthOpenness) * 0.4
+                    vrm.expressionManager.setValue('joy', 0.3)
+                } else {
+                    speakState.mouthOpenness *= 0.8
+                }
+                vrm.expressionManager.setValue('aa', Math.min(speakState.mouthOpenness, 0.7))
+            } else if (sneezeState.active) {
                 vrm.expressionManager.setValue('aa', mouthOpenOverride)
                 if (mouthOpenOverride > 0.5) vrm.expressionManager.setValue('joy', 0.5);
                 else vrm.expressionManager.setValue('joy', 0);
@@ -359,22 +417,16 @@ function App() {
         const rightUpperArm = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm')
         const rightLowerArm = vrm.humanoid?.getNormalizedBoneNode('rightLowerArm')
 
-        // Default Idle Arms
         let rArmZ = Math.PI / 3 + Math.sin(time * 0.7) * 0.02 + Math.sin(time * 0.31) * 0.01
         let rArmX = Math.sin(time * 0.5) * 0.015
         let rForeArmX = -0.1 + Math.sin(time * 0.6) * 0.015
 
-        // NOTE: Logika tangan naik saat bersin (override) telah DIHAPUS.
-        // Tangan akan tetap menggunakan kalkulasi Idle di atas.
-
-        // Apply Left Arm (Standard Idle)
         if (leftUpperArm) {
              leftUpperArm.rotation.z = -Math.PI / 3 + Math.sin(time * 0.6) * 0.02 + Math.sin(time * 0.27) * 0.01
              leftUpperArm.rotation.x = Math.sin(time * 0.4) * 0.015
         }
         if (leftLowerArm) leftLowerArm.rotation.x = -0.1 + Math.sin(time * 0.5) * 0.015
 
-        // Apply Right Arm (Idle only)
         if (rightUpperArm) {
              rightUpperArm.rotation.z = rArmZ
              rightUpperArm.rotation.x = rArmX
