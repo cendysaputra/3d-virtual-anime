@@ -167,6 +167,35 @@ function App() {
     function getRandomPose() { return poses[Math.floor(Math.random() * poses.length)] }
     function getRandomInterval() { return 2.5 + Math.random() * 4 }
 
+    // === ORGANIC MOVEMENT STATE (gerakan organik yang terus menerus) ===
+    const organicState = {
+        // Breathing - napas yang natural
+        breathPhase: 0,
+        breathSpeed: 0.8,
+        breathDepth: 1,
+        
+        // Weight shifting - perpindahan berat badan
+        weightShiftPhase: 0,
+        weightShiftSpeed: 0.15,
+        
+        // Subtle sway - ayunan halus
+        swayPhase: 0,
+        
+        // Shoulder micro-movements
+        shoulderLeft: 0,
+        shoulderRight: 0,
+        
+        // Arm organic movements
+        armSwayLeft: 0,
+        armSwayRight: 0,
+        
+        // Occasional natural gestures
+        gestureTimer: 0,
+        gestureInterval: 8 + Math.random() * 12, // 8-20 detik
+        currentGesture: null,
+        gestureProgress: 0
+    }
+
     // === EVENT LISTENERS ===
     const resetIdleTimer = () => {
         lastInteractionTime = clock.getElapsedTime()
@@ -226,6 +255,33 @@ function App() {
           const windZ = Math.cos(time * 0.5) * 0.03 + Math.cos(time * 0.9 + 2.0) * 0.02
           vrm.springBoneManager.joints.forEach((joint) => { joint.settings.gravityDir.set(windX, -1, windZ).normalize(); joint.settings.gravityPower = 0.4 })
         }
+
+        // === UPDATE ORGANIC MOVEMENTS (selalu berjalan, mengalir natural) ===
+        
+        // Breathing - napas dengan variasi natural
+        organicState.breathPhase += delta * organicState.breathSpeed
+        const breathVariation = Math.sin(time * 0.1) * 0.2 // Variasi kecepatan napas
+        const breathCycle = Math.sin(organicState.breathPhase + breathVariation)
+        const breathAmount = breathCycle * 0.003 * organicState.breathDepth
+        
+        // Weight shifting - perpindahan berat badan yang sangat halus
+        organicState.weightShiftPhase += delta * organicState.weightShiftSpeed
+        const weightShift = Math.sin(organicState.weightShiftPhase) * 0.015
+        const weightShiftZ = Math.cos(organicState.weightShiftPhase * 0.7) * 0.008
+        
+        // Subtle body sway - ayunan tubuh yang hampir tidak terlihat
+        const sway1 = Math.sin(time * 0.3) * 0.004
+        const sway2 = Math.sin(time * 0.17 + 1.2) * 0.003
+        const sway3 = Math.cos(time * 0.23 + 0.5) * 0.002
+        const totalSway = sway1 + sway2 + sway3
+        
+        // Shoulder micro-movements - gerakan bahu sangat halus
+        organicState.shoulderLeft = Math.sin(time * 0.4) * 0.006 + Math.sin(time * 0.17) * 0.004
+        organicState.shoulderRight = Math.sin(time * 0.35 + 1) * 0.006 + Math.sin(time * 0.19 + 0.5) * 0.004
+        
+        // Arm organic sway - gerakan tangan yang natural
+        organicState.armSwayLeft = Math.sin(time * 0.5) * 0.015 + Math.sin(time * 0.23) * 0.008
+        organicState.armSwayRight = Math.sin(time * 0.45 + 0.8) * 0.015 + Math.sin(time * 0.21 + 1.2) * 0.008
 
         // === LOGIKA ANIMASI UTAMA ===
         
@@ -299,12 +355,15 @@ function App() {
                 danceHeadZ = Math.sin(rhythm) * 0.03 * intensity
             }
         } 
-        // 3. LOGIKA IDLE
+        // 3. LOGIKA IDLE dengan gerakan organik
         else {
             poseState.idleTime += delta
             if (poseState.idleTime > poseState.nextChangeTime) {
-                poseState.target = getRandomPose(); poseState.nextChangeTime = getRandomInterval(); poseState.idleTime = 0;
-                poseState.transitionSpeed = 0.012 + Math.random() * 0.015
+                poseState.target = getRandomPose()
+                poseState.nextChangeTime = getRandomInterval()
+                poseState.idleTime = 0
+                // Variasi kecepatan transisi untuk lebih natural
+                poseState.transitionSpeed = 0.008 + Math.random() * 0.012
             }
         }
 
@@ -324,7 +383,7 @@ function App() {
                     eyeState.targetX = glance.x; eyeState.isGlancing = true; eyeState.moveInterval = 0.5 + Math.random() * 1.0
                 }
             }
-            const eyeLerp = 0.1
+            const eyeLerp = 0.08 // Lebih smooth
             eyeState.currentY += (eyeState.targetY - eyeState.currentY) * eyeLerp
             eyeState.currentX += (eyeState.targetX - eyeState.currentX) * eyeLerp
         } else {
@@ -332,7 +391,7 @@ function App() {
             eyeState.currentX = 0
         }
 
-        // LERP MOVEMENT BADAN
+        // LERP MOVEMENT BADAN (dengan organic overlay)
         const lerp = poseState.transitionSpeed
         poseState.current.headY += (poseState.target.headY - poseState.current.headY) * lerp
         poseState.current.headX += (poseState.target.headX - poseState.current.headX) * lerp
@@ -341,29 +400,34 @@ function App() {
         poseState.current.spineZ += (poseState.target.spineZ - poseState.current.spineZ) * lerp
         poseState.current.chestY += (poseState.target.chestY - poseState.current.chestY) * lerp
 
-        // Micro movement
-        const microX = Math.sin(time * 0.8) * 0.003
-        const microY = Math.sin(time * 0.6) * 0.003
-        const microZ = Math.sin(time * 0.5) * 0.002
+        // Micro movement yang mengalir (multi-layer sine waves)
+        const microX = Math.sin(time * 0.8) * 0.002 + Math.sin(time * 0.35) * 0.001
+        const microY = Math.sin(time * 0.6) * 0.002 + Math.cos(time * 0.28) * 0.001
+        const microZ = Math.sin(time * 0.5) * 0.0015 + Math.sin(time * 0.19) * 0.0008
 
-        // APPLY BONES (HEAD, SPINE, CHEST)
+        // APPLY BONES (HEAD, SPINE, CHEST) dengan organic overlay
         const head = vrm.humanoid?.getNormalizedBoneNode('head')
         if (head) {
-            head.rotation.y = poseState.current.headY + microY
-            head.rotation.x = poseState.current.headX + microX + danceHeadX
-            head.rotation.z = poseState.current.headZ + danceHeadZ
+            head.rotation.y = poseState.current.headY + microY + totalSway * 0.3
+            head.rotation.x = poseState.current.headX + microX + breathAmount * 0.5 + danceHeadX
+            head.rotation.z = poseState.current.headZ + danceHeadZ + weightShiftZ * 0.2
         }
+        
         const spine = vrm.humanoid?.getNormalizedBoneNode('spine')
         if (spine) {
-            const bodyFollowHeadY = poseState.current.headY * 0.2; 
-            const bodyFollowHeadZ = poseState.current.headZ * 0.1; 
-            spine.rotation.y = poseState.current.spineY + microY * 0.3 + bodyFollowHeadY
-            spine.rotation.z = poseState.current.spineZ + microZ + danceSpineZ + bodyFollowHeadZ
+            const bodyFollowHeadY = poseState.current.headY * 0.2
+            const bodyFollowHeadZ = poseState.current.headZ * 0.1
+            spine.rotation.y = poseState.current.spineY + microY * 0.3 + bodyFollowHeadY + totalSway
+            spine.rotation.z = poseState.current.spineZ + microZ + danceSpineZ + bodyFollowHeadZ + weightShift
+            spine.rotation.x = breathAmount * 0.8 // Breathing effect pada spine
         }
+        
         const chest = vrm.humanoid?.getNormalizedBoneNode('chest')
         if (chest) { 
-            const chestFollowHeadY = poseState.current.headY * 0.1;
-            chest.rotation.y = poseState.current.chestY + microY * 0.2 + danceChestY + chestFollowHeadY
+            const chestFollowHeadY = poseState.current.headY * 0.1
+            chest.rotation.y = poseState.current.chestY + microY * 0.2 + danceChestY + chestFollowHeadY + totalSway * 0.5
+            chest.rotation.x = breathAmount * 1.2 // Breathing lebih terasa di chest
+            chest.rotation.z = weightShiftZ * 0.3
         }
 
         // APPLY MATA
@@ -409,30 +473,52 @@ function App() {
             }
         }
         
-        vrm.scene.position.y = Math.sin(time * 2) * 0.002
+        // Breathing effect pada posisi Y (sangat halus)
+        vrm.scene.position.y = Math.sin(time * 2) * 0.001 + breathAmount * 0.3
 
-        // === UPDATE GERAKAN TANGAN ===
+        // === UPDATE GERAKAN TANGAN (dengan organic movement) ===
         const leftUpperArm = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm')
         const leftLowerArm = vrm.humanoid?.getNormalizedBoneNode('leftLowerArm')
         const rightUpperArm = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm')
         const rightLowerArm = vrm.humanoid?.getNormalizedBoneNode('rightLowerArm')
 
-        let rArmZ = Math.PI / 3 + Math.sin(time * 0.7) * 0.02 + Math.sin(time * 0.31) * 0.01
-        let rArmX = Math.sin(time * 0.5) * 0.015
-        let rForeArmX = -0.1 + Math.sin(time * 0.6) * 0.015
+        // Base arm positions dengan organic overlay
+        const armBreathEffect = breathCycle * 0.008
+        
+        let lArmZ = -Math.PI / 3 + organicState.armSwayLeft + weightShift * 0.3
+        let lArmX = Math.sin(time * 0.4) * 0.01 + armBreathEffect
+        let lForeArmX = -0.1 + Math.sin(time * 0.5) * 0.012 + Math.sin(time * 0.22) * 0.006
+        
+        let rArmZ = Math.PI / 3 + organicState.armSwayRight - weightShift * 0.3
+        let rArmX = Math.sin(time * 0.45 + 0.5) * 0.01 + armBreathEffect
+        let rForeArmX = -0.1 + Math.sin(time * 0.55 + 0.3) * 0.012 + Math.sin(time * 0.25 + 1) * 0.006
 
+        // Apply shoulder dengan organic movement
+        const leftShoulder = vrm.humanoid?.getNormalizedBoneNode('leftShoulder')
+        const rightShoulder = vrm.humanoid?.getNormalizedBoneNode('rightShoulder')
+        if (leftShoulder) leftShoulder.rotation.z = organicState.shoulderLeft + breathAmount * 0.5
+        if (rightShoulder) rightShoulder.rotation.z = -organicState.shoulderRight - breathAmount * 0.5
+
+        // Apply tangan kiri
         if (leftUpperArm) {
-             leftUpperArm.rotation.z = -Math.PI / 3 + Math.sin(time * 0.6) * 0.02 + Math.sin(time * 0.27) * 0.01
-             leftUpperArm.rotation.x = Math.sin(time * 0.4) * 0.015
+             leftUpperArm.rotation.z = lArmZ
+             leftUpperArm.rotation.x = lArmX
         }
-        if (leftLowerArm) leftLowerArm.rotation.x = -0.1 + Math.sin(time * 0.5) * 0.015
+        if (leftLowerArm) leftLowerArm.rotation.x = lForeArmX
 
-        // Apply tangan kanan (wave atau idle)
+        // Apply tangan kanan
         if (rightUpperArm) {
              rightUpperArm.rotation.z = rArmZ
              rightUpperArm.rotation.x = rArmX
         }
         if (rightLowerArm) rightLowerArm.rotation.x = rForeArmX
+
+        // Hips slight movement untuk weight shifting
+        const hips = vrm.humanoid?.getNormalizedBoneNode('hips')
+        if (hips) {
+            hips.rotation.y = totalSway * 0.4
+            hips.rotation.z = weightShift * 0.5
+        }
 
         vrm.update(delta)
       }
